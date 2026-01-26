@@ -1,0 +1,7 @@
+# Python 3.9 이상 권장 (Python 3.11 또는 3.12 권장)
+# requests는 Python 3.9+ 공식 지원
+# beautifulsoup4는 Python 3.7+ 지원
+
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+lxml>=4.9.0
