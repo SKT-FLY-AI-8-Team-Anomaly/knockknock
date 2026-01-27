@@ -11,6 +11,50 @@ sys.path.insert(0, str(Path(__file__).parent))
 from google_crawling import GoogleCrawler
 
 
+def load_exclude_patterns_from_file(filepath):
+    """
+    JSON 파일에서 제외 패턴 리스트를 로드
+    
+    지원 형식:
+    - JSON: ["pattern1", "pattern2", ...] 또는 {"patterns": ["pattern1", ...]}
+    
+    Args:
+        filepath: 제외 패턴 JSON 파일 경로
+        
+    Returns:
+        제외 패턴 리스트
+    """
+    filepath = Path(filepath)
+    
+    if not filepath.exists():
+        print(f"제외 패턴 파일을 찾을 수 없습니다: {filepath} (무시하고 계속합니다)")
+        return []
+    
+    # JSON 파일만 지원
+    if filepath.suffix.lower() != '.json':
+        raise ValueError(f"JSON 파일만 지원합니다. 파일 확장자가 .json이어야 합니다: {filepath}")
+    
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            if isinstance(data, list):
+                patterns = [pattern.strip() for pattern in data if pattern.strip()]
+            elif isinstance(data, dict) and 'patterns' in data:
+                patterns = [pattern.strip() for pattern in data['patterns'] if pattern.strip()]
+            else:
+                raise ValueError("JSON 파일은 패턴 리스트 또는 {'patterns': [...]} 형식이어야 합니다.")
+    except json.JSONDecodeError as e:
+        raise ValueError(f"JSON 파일 형식이 올바르지 않습니다: {e}")
+    
+    if patterns:
+        print(f"{len(patterns)}개 제외 패턴을 {filepath}에서 로드했습니다.")
+        print(f"제외 패턴: {', '.join(patterns)}")
+    else:
+        print(f"제외 패턴 파일이 비어있습니다: {filepath}")
+    
+    return patterns
+
+
 def load_search_urls_from_file(filepath):
     """
     JSON 파일에서 검색 URL 리스트를 로드
@@ -53,15 +97,38 @@ def load_search_urls_from_file(filepath):
 
 
 class LinkCollector:
-    def __init__(self, delay=1.0, headless=True, browser_type='chromium'):
+    def __init__(self, delay=1.0, headless=True, browser_type='chromium', exclude_patterns=None):
         """
         Args:
             delay: 요청 간 대기 시간 (초)
             headless: 헤드리스 모드 사용 여부
             browser_type: 브라우저 타입 ('chromium', 'firefox', 'webkit')
+            exclude_patterns: 제외할 URL 패턴 리스트 (문자열 또는 정규식 패턴)
         """
         self.crawler = GoogleCrawler(delay=delay, headless=headless, browser_type=browser_type)
         self.all_links = set()
+        self.excluded_links = set()
+        self.exclude_patterns = exclude_patterns or []
+    
+    def should_exclude_link(self, link):
+        """
+        링크가 제외 패턴과 매칭되는지 확인
+        
+        Args:
+            link: 확인할 URL 문자열
+            
+        Returns:
+            제외해야 하면 True, 아니면 False
+        """
+        if not self.exclude_patterns:
+            return False
+        
+        for pattern in self.exclude_patterns:
+            # 패턴이 링크에 포함되어 있으면 제외
+            if pattern in link:
+                return True
+        
+        return False
     
     def collect_from_search_urls(self, search_urls, max_pages_per_search=10):
         """
@@ -89,11 +156,24 @@ class LinkCollector:
                         keep_browser_open=keep_open
                     )
                     
+                    # 제외 패턴에 따라 링크 필터링
+                    filtered_links = []
+                    excluded_count = 0
+                    
+                    for link in links:
+                        if self.should_exclude_link(link):
+                            self.excluded_links.add(link)
+                            excluded_count += 1
+                        else:
+                            filtered_links.append(link)
+                    
                     before_count = len(self.all_links)
-                    self.all_links.update(links)
+                    self.all_links.update(filtered_links)
                     new_count = len(self.all_links) - before_count
                     
-                    print(f"새로운 링크 {new_count}개 추가 (중복 {len(links) - new_count}개 제거)")
+                    print(f"새로운 링크 {new_count}개 추가 (중복 {len(filtered_links) - new_count}개 제거)")
+                    if excluded_count > 0:
+                        print(f"제외된 링크 {excluded_count}개 (패턴 매칭)")
                     print(f"현재 총 링크 수: {len(self.all_links)}")
                     
                 except Exception as e:
@@ -129,6 +209,26 @@ class LinkCollector:
             json.dump(links, f, ensure_ascii=False, indent=2)
         
         print(f"\n{len(links)}개 링크를 {filepath}에 저장했습니다.")
+    
+    def save_excluded_links(self, filepath):
+        """
+        제외된 링크를 별도 파일에 저장
+        
+        Args:
+            filepath: 저장할 파일 경로
+        """
+        if not self.excluded_links:
+            print("제외된 링크가 없습니다.")
+            return
+        
+        filepath = Path(filepath)
+        filepath.parent.mkdir(parents=True, exist_ok=True)
+        
+        excluded_list = sorted(list(self.excluded_links))
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(excluded_list, f, ensure_ascii=False, indent=2)
+        
+        print(f"{len(excluded_list)}개 제외된 링크를 {filepath}에 저장했습니다.")
     
     def load_links(self, filepath):
         """

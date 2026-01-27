@@ -26,9 +26,18 @@ def example_usage():
         "https://www.google.com/search?q=web+scraping",
     ]
     
-    # 링크 수집
+    # 링크 수집 (제외 패턴 사용 예시)
     print("\n[1단계] 링크 수집 중...")
-    collector = LinkCollector(delay=1.0)
+    
+    # 제외할 패턴 설정 (예: 소셜 미디어 링크 제외)
+    exclude_patterns = [
+        "youtube.com",
+        "youtu.be",
+        "facebook.com",
+        "instagram.com"
+    ]
+    
+    collector = LinkCollector(delay=1.0, exclude_patterns=exclude_patterns)
     links = collector.collect_from_search_urls(
         search_urls, 
         max_pages_per_search=3  # 각 검색당 3페이지만
@@ -37,6 +46,11 @@ def example_usage():
     # 링크 저장
     links_file = "data/crawling/data/collected_links.json"
     collector.save_links(links_file, links)
+    
+    # 제외된 링크 저장 (있는 경우)
+    if collector.excluded_links:
+        excluded_file = "data/crawling/data/excluded_links.json"
+        collector.save_excluded_links(excluded_file)
     
     # 2. 수집한 링크에서 텍스트 추출
     print("\n[2단계] 텍스트 추출 중...")

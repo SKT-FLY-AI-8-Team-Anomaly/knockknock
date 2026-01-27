@@ -2,6 +2,25 @@
 # requests는 Python 3.9+ 공식 지원
 # beautifulsoup4는 Python 3.7+ 지원
 
+# Python 3.11.9 사용함
+
 requests>=2.31.0
 beautifulsoup4>=4.12.0
 lxml>=4.9.0
+# Python 3.9 이상 권장 (Python 3.11 또는 3.12 권장)
+# Playwright는 Python 3.8+ 지원
+
+# Playwright - 브라우저 자동화 (구글 크롤링에 사용)
+playwright>=1.40.0
+
+# 참고: Playwright 설치 후 브라우저 설치 필요
+# playwright install chromium
+# 또는 playwright install (모든 브라우저 설치)
+
+# 본문 추출 라이브러리
+trafilatura>=1.6.0
+
+# 이전 버전 (requests + BeautifulSoup4) - 더 이상 사용하지 않음
+# requests>=2.31.0
+# beautifulsoup4>=4.12.0
+# lxml>=4.9.0

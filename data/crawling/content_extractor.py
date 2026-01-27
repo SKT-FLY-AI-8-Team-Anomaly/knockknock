@@ -7,6 +7,14 @@ import json
 from pathlib import Path
 from urllib.parse import urlparse
 
+try:
+    import trafilatura
+    TRAFILATURA_AVAILABLE = True
+except ImportError:
+    TRAFILATURA_AVAILABLE = False
+    print("경고: trafilatura가 설치되지 않았습니다. 본문 추출 품질이 떨어질 수 있습니다.")
+    print("설치: pip install trafilatura")
+
 
 class ContentExtractor:
     def __init__(self, delay=1.0, timeout=30000, headless=True, browser_type='chromium'):
@@ -60,13 +68,13 @@ class ContentExtractor:
     
     def extract_text_from_url(self, url):
         """
-        URL에서 텍스트 내용 추출
+        URL에서 본문 텍스트 내용 추출 (광고, 사이드바 등 제외)
         
         Args:
             url: 추출할 URL
             
         Returns:
-            추출된 텍스트 (실패 시 None)
+            추출된 본문 텍스트 (실패 시 None)
         """
         page = None
         try:
@@ -89,63 +97,41 @@ class ContentExtractor:
             # 추가 대기 (JavaScript 실행 완료 대기)
             page.wait_for_timeout(2000)
             
-            # 스크립트와 스타일 태그 제거를 위한 JavaScript 실행
-            page.evaluate("""
-                // 스크립트와 스타일 태그 제거
-                const scripts = document.querySelectorAll('script, style, noscript, iframe');
-                scripts.forEach(el => el.remove());
-            """)
-            
-            # body에서 직접 텍스트 추출 (가장 안정적)
-            try:
-                body = page.query_selector('body')
-                if body:
-                    text = body.inner_text()
-                    if text and len(text.strip()) > 50:  # 최소 50자 이상
-                        # 공백 정리
-                        lines = (line.strip() for line in text.splitlines())
-                        chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-                        text = '\n'.join(chunk for chunk in chunks if chunk)
-                        return text
-            except Exception as e:
-                print(f"  body 텍스트 추출 실패: {e}")
-            
-            # body가 실패하면 메인 콘텐츠 영역 찾기
-            content_selectors = [
-                'main',
-                'article',
-                '[role="main"]',
-                '.content',
-                '#content',
-                '.main-content',
-                '.post-content',
-                '.entry-content'
-            ]
-            
-            for selector in content_selectors:
+            # trafilatura를 사용한 본문 추출 (가장 우선)
+            if TRAFILATURA_AVAILABLE:
                 try:
-                    element = page.query_selector(selector)
-                    if element:
-                        text = element.inner_text()
+                    # HTML 가져오기
+                    html_content = page.content()
+                    
+                    # trafilatura로 본문 추출 (output_format='txt' 또는 생략)
+                    extracted = trafilatura.extract(
+                        html_content,
+                        url=url,
+                        include_comments=False,
+                        include_tables=True,
+                        include_images=False,
+                        include_links=False,
+                        output_format='txt'  # 'plaintext'가 아니라 'txt' 사용
+                    )
+                    
+                    if extracted and len(extracted.strip()) > 50:
+                        # 공백 정리
+                        lines = (line.strip() for line in extracted.splitlines())
+                        text = '\n'.join(line for line in lines if line)
                         if text and len(text.strip()) > 50:
-                            # 공백 정리
-                            lines = (line.strip() for line in text.splitlines())
-                            chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-                            text = '\n'.join(chunk for chunk in chunks if chunk)
                             return text
                 except Exception as e:
-                    continue
+                    print(f"  trafilatura 추출 실패, 대체 방법 시도: {e}")
             
-            # 모든 방법 실패 시 페이지 전체 텍스트 추출
-            try:
-                text = page.inner_text('body')
-                if text and len(text.strip()) > 50:
-                    lines = (line.strip() for line in text.splitlines())
-                    chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-                    text = '\n'.join(chunk for chunk in chunks if chunk)
-                    return text
-            except Exception as e:
-                print(f"  페이지 전체 텍스트 추출 실패: {e}")
+            # trafilatura 실패 시 JavaScript로 본문 추출 시도
+            text = self._extract_main_content_with_js(page)
+            if text:
+                return text
+            
+            # JavaScript 방법도 실패하면 기존 방법들 시도
+            text = self._extract_with_selectors(page)
+            if text:
+                return text
             
             return None
             
@@ -162,13 +148,137 @@ class ContentExtractor:
                 except:
                     pass
     
-    def extract_from_links(self, links, output_file=None):
+    def _extract_main_content_with_js(self, page):
+        """
+        JavaScript를 사용하여 본문 추출 (광고, 사이드바 등 제거)
+        """
+        try:
+            # 불필요한 요소 제거 및 본문 추출
+            text = page.evaluate("""
+                () => {
+                    // 불필요한 요소 제거
+                    const unwantedSelectors = [
+                        'nav', 'header', 'footer', 'aside', 'sidebar',
+                        '.ad', '.advertisement', '.ads', '.ad-banner',
+                        '.sidebar', '.side-menu', '.navigation',
+                        '.menu', '.nav', '.header', '.footer',
+                        '.comment', '.comments', '.comment-section',
+                        '.related', '.related-posts', '.recommend',
+                        '.social', '.share', '.sns',
+                        'script', 'style', 'noscript', 'iframe',
+                        '[role="navigation"]', '[role="banner"]', '[role="complementary"]',
+                        '[class*="ad"]', '[class*="advertisement"]', '[id*="ad"]',
+                        '[class*="sidebar"]', '[class*="menu"]', '[class*="nav"]'
+                    ];
+                    
+                    unwantedSelectors.forEach(selector => {
+                        try {
+                            document.querySelectorAll(selector).forEach(el => el.remove());
+                        } catch(e) {}
+                    });
+                    
+                    // 본문 영역 찾기 (우선순위 순)
+                    const contentSelectors = [
+                        'article',
+                        'main',
+                        '[role="main"]',
+                        '.post-content',
+                        '.entry-content',
+                        '.article-content',
+                        '.content-body',
+                        '.article-body',
+                        '.post-body',
+                        '.entry-body',
+                        '#content',
+                        '.content',
+                        '.main-content',
+                        '.article',
+                        '.post'
+                    ];
+                    
+                    for (const selector of contentSelectors) {
+                        const element = document.querySelector(selector);
+                        if (element) {
+                            const text = element.innerText || element.textContent;
+                            if (text && text.trim().length > 100) {
+                                return text.trim();
+                            }
+                        }
+                    }
+                    
+                    // 본문 영역을 찾지 못한 경우, 가장 긴 텍스트 블록 찾기
+                    const paragraphs = Array.from(document.querySelectorAll('p'));
+                    if (paragraphs.length > 0) {
+                        const mainContent = paragraphs
+                            .map(p => p.innerText || p.textContent)
+                            .filter(text => text.trim().length > 20)
+                            .join('\\n\\n');
+                        
+                        if (mainContent.trim().length > 100) {
+                            return mainContent.trim();
+                        }
+                    }
+                    
+                    return null;
+                }
+            """)
+            
+            if text and len(text.strip()) > 50:
+                # 공백 정리
+                lines = (line.strip() for line in text.splitlines())
+                cleaned_text = '\n'.join(line for line in lines if line)
+                if cleaned_text and len(cleaned_text.strip()) > 50:
+                    return cleaned_text
+            
+            return None
+        except Exception as e:
+            return None
+    
+    def _extract_with_selectors(self, page):
+        """
+        기존 선택자 기반 추출 방법 (fallback)
+        """
+        # 메인 콘텐츠 영역 찾기
+        content_selectors = [
+            'article',
+            'main',
+            '[role="main"]',
+            '.post-content',
+            '.entry-content',
+            '.article-content',
+            '.content-body',
+            '.article-body',
+            '.post-body',
+            '.entry-body',
+            '#content',
+            '.content',
+            '.main-content'
+        ]
+        
+        for selector in content_selectors:
+            try:
+                element = page.query_selector(selector)
+                if element:
+                    text = element.inner_text()
+                    if text and len(text.strip()) > 50:
+                        # 공백 정리
+                        lines = (line.strip() for line in text.splitlines())
+                        cleaned_text = '\n'.join(line for line in lines if line)
+                        if cleaned_text and len(cleaned_text.strip()) > 50:
+                            return cleaned_text
+            except Exception:
+                continue
+        
+        return None
+    
+    def extract_from_links(self, links, output_file=None, save_interval=10):
         """
         여러 링크에서 텍스트 내용 추출
         
         Args:
             links: URL 리스트
             output_file: 결과를 저장할 파일 경로 (선택사항)
+            save_interval: 중간 저장 간격 (N개 링크마다 저장, 0이면 중간 저장 안함)
             
         Returns:
             URL과 텍스트를 매핑한 딕셔너리
@@ -194,17 +304,58 @@ class ContentExtractor:
                     print(f"  실패: 텍스트 추출 불가")
                     results[url] = None
                 
+                # 중간 저장 (설정된 간격마다)
+                if output_file and save_interval > 0 and i % save_interval == 0:
+                    # 기존 결과 로드 (있는 경우)
+                    existing_results = {}
+                    if Path(output_file).exists():
+                        try:
+                            with open(output_file, 'r', encoding='utf-8') as f:
+                                existing_results = json.load(f)
+                        except:
+                            pass
+                    
+                    # 병합 후 저장
+                    all_results = {**existing_results, **results}
+                    self.save_results(all_results, output_file)
+                    print(f"  [중간 저장] {i}개 링크 처리 완료, 결과 저장됨")
+                
                 # 요청 간 대기
                 if i < total:
                     time.sleep(self.delay)
+        
+        except KeyboardInterrupt:
+            print("\n\n사용자에 의해 중단되었습니다.")
+            # 중단 시에도 결과 저장
+            if output_file:
+                existing_results = {}
+                if Path(output_file).exists():
+                    try:
+                        with open(output_file, 'r', encoding='utf-8') as f:
+                            existing_results = json.load(f)
+                    except:
+                        pass
+                all_results = {**existing_results, **results}
+                self.save_results(all_results, output_file)
+                print(f"중단된 시점까지의 결과를 {output_file}에 저장했습니다.")
+            raise
         
         finally:
             # 브라우저 종료
             self._close_browser()
         
-        # 결과 저장
+        # 최종 결과 저장
         if output_file:
-            self.save_results(results, output_file)
+            # 기존 결과와 병합
+            existing_results = {}
+            if Path(output_file).exists():
+                try:
+                    with open(output_file, 'r', encoding='utf-8') as f:
+                        existing_results = json.load(f)
+                except:
+                    pass
+            all_results = {**existing_results, **results}
+            self.save_results(all_results, output_file)
         
         success_count = sum(1 for v in results.values() if v is not None)
         print(f"\n완료: {success_count}/{total}개 링크에서 텍스트 추출 성공")

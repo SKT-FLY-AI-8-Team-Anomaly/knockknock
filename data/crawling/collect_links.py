@@ -7,7 +7,7 @@ from pathlib import Path
 # 현재 디렉토리를 경로에 추가
 sys.path.insert(0, str(Path(__file__).parent))
 
-from link_collector import LinkCollector, load_search_urls_from_file
+from link_collector import LinkCollector, load_search_urls_from_file, load_exclude_patterns_from_file
 
 
 def main():
@@ -35,6 +35,11 @@ def main():
         print("검색 URL이 없습니다. 종료합니다.")
         return
     
+    # 제외 패턴 로드
+    exclude_patterns_file = "data/crawling/data/exclude_patterns.json"
+    print(f"\n[1-2단계] 제외 패턴 파일 로드: {exclude_patterns_file}")
+    exclude_patterns = load_exclude_patterns_from_file(exclude_patterns_file)
+    
     # 설정
     max_pages_per_search = int(input("\n각 검색당 최대 페이지 수 (기본값: 10): ").strip() or "10")
     delay = float(input("요청 간 대기 시간(초) (기본값: 1.0): ").strip() or "1.0")
@@ -52,12 +57,17 @@ def main():
     print("[2단계] 링크 수집")
     print("=" * 60)
     
-    collector = LinkCollector(delay=delay, headless=headless)
+    collector = LinkCollector(delay=delay, headless=headless, exclude_patterns=exclude_patterns)
     links = collector.collect_from_search_urls(search_urls, max_pages_per_search=max_pages_per_search)
     
     # 링크 저장
     links_file = "data/crawling/data/collected_links.json"
     collector.save_links(links_file, links)
+    
+    # 제외된 링크 저장 (제외된 링크가 있는 경우)
+    if collector.excluded_links:
+        excluded_links_file = "data/crawling/data/excluded_links.json"
+        collector.save_excluded_links(excluded_links_file)
     
     # 완료
     print("\n" + "=" * 60)
@@ -65,6 +75,8 @@ def main():
     print("=" * 60)
     print(f"수집된 링크: {links_file}")
     print(f"총 {len(links)}개 링크 수집 완료")
+    if collector.excluded_links:
+        print(f"제외된 링크: {len(collector.excluded_links)}개")
 
 
 if __name__ == "__main__":
