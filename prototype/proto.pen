@@ -1,0 +1,45 @@
+{
+  "version": "2.6",
+  "children": [
+    {
+      "type": "frame",
+      "id": "pVuxm",
+      "x": -244,
+      "y": -127,
+      "name": "Proto Spec",
+      "width": 1000,
+      "fill": "#F9FAFB",
+      "cornerRadius": 16,
+      "layout": "vertical",
+      "gap": 16,
+      "padding": 24,
+      "children": [
+        {
+          "type": "text",
+          "id": "3DiNz",
+          "name": "header",
+          "fill": "#111827",
+          "textGrowth": "fixed-width",
+          "width": "fill_container",
+          "content": "KnockKnock 부동산 매니저 — 프로토타입 요약",
+          "fontFamily": "Inter",
+          "fontSize": 24,
+          "fontWeight": "700"
+        },
+        {
+          "type": "text",
+          "id": "cmR9j",
+          "name": "body",
+          "fill": "#374151",
+          "textGrowth": "fixed-width",
+          "width": "fill_container",
+          "content": "목표\n- 초보 실수 줄이기 + 집 보러 다닐 때/계약할 때 필요한 정보와 서류를 한 곳에서 관리\n- figma-code 리액트 구조(인증 → 선호도 설정 → 메인 탭)를 Pencil 프로토타입으로 변환\n\n주요 플로우\n- 앱 시작 시 세션 확인 → auth / preferences / main 분기\n- 인증 완료 후 선호도 존재 여부에 따라 main 또는 preferences 이동\n\n메인 탭\n- 임장 / 서류 / 챗봇 / 계약 / 마이\n\n화면 매핑 (figma-screens)\n- 로그인.png → AuthPage(로그인)\n- 회원가입.png → AuthPage(회원가입)\n- 선호도1~3.png → PreferencesPage\n- 임장/서류/챗봇/계약/마이1~2.png → MainPage/MyPage\n\n다음 단계 제안\n- 각 화면별 상세 레이아웃(컴포넌트 단위) 생성\n- 탭별 실제 기능 플로우(임장 기록, 서류 체크리스트, 계약 타임라인) 구체화",
+          "lineHeight": 1.5,
+          "fontFamily": "Inter",
+          "fontSize": 14,
+          "fontWeight": "normal"
+        }
+      ]
+    }
+  ]
+}
