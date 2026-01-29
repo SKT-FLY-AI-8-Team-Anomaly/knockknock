@@ -7,7 +7,9 @@ on:
 jobs:
   assign-reviewers:
     runs-on: ubuntu-latest
-
+    permissions:
+      pull-requests: write
+      contents: read
     steps:
       - name: Assign reviewers (exclude author)
         env:
@@ -17,12 +19,14 @@ jobs:
           pr_number="${{ github.event.pull_request.number }}"
           repo="${{ github.repository }}"
 
+          # Get comma-separated list of reviewers
           reviewers=$(gh api repos/$repo/collaborators \
-            --jq ".[] | select(.login != \"$author\") | .login")
+            --jq "[.[] | select(.login != \"$author\") | .login] | join(\",\")")
 
-          echo "Reviewers:"
-          echo "$reviewers"
+          echo "Reviewers list: $reviewers"
 
-          for r in $reviewers; do
-            gh pr edit "$pr_number" --repo "$repo" --add-reviewer "$r" || true
-          done
+          if [ -n "$reviewers" ]; then
+            gh pr edit "$pr_number" --repo "$repo" --add-reviewer "$reviewers"
+          else
+            echo "No reviewers to assign."
+          fi
