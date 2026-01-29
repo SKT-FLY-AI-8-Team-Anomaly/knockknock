@@ -22,7 +22,7 @@ jobs:
             https://api.github.com/repos/${{ github.repository }}/collaborators \
             | jq -c --arg author "$author" '[.[] | select(.login != $author) | .login]')
 
-          echo "reviewers=$reviewers_json" >> "$GITHUB_OUTPUT"
+          echo "REVIEWERS=$reviewers_json" >> "$GITHUB_ENV"
           echo "Reviewers: $reviewers_json"
 
       - name: Add reviewers to PR
@@ -30,5 +30,5 @@ jobs:
           curl -s -X POST \
             -H "Authorization: token ${{ secrets.SHL0501TOKEN }}" \
             -H "Content-Type: application/json" \
-            -d "{\"reviewers\": ${{ steps.reviewers.outputs.reviewers }} }" \
+            -d '{"reviewers":'"$REVIEWERS"'}' \
             https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/requested_reviewers
