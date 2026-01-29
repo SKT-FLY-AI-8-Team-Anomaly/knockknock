@@ -15,18 +15,28 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.SHL0501TOKEN }}
         run: |
+          # 1. PR 정보 가져오기
           author="${{ github.event.pull_request.user.login }}"
           pr_number="${{ github.event.pull_request.number }}"
           repo="${{ github.repository }}"
 
-          # Get comma-separated list of reviewers
-          reviewers=$(gh api repos/$repo/collaborators \
-            --jq "[.[] | select(.login != \"$author\") | .login] | join(\",\")")
+          echo "Author: $author"
+          echo "Repo: $repo"
 
-          echo "Reviewers list: $reviewers"
+          # 2. 협업자 목록 가져오기 (JSON 배열 형식 그대로 유지)
+          # 예: ["user1", "user2"]
+          reviewers_json=$(gh api repos/$repo/collaborators \
+            --jq "[.[] | select(.login != \"$author\") | .login]")
 
-          if [ -n "$reviewers" ]; then
-            gh pr edit "$pr_number" --repo "$repo" --add-reviewer "$reviewers"
-          else
-            echo "No reviewers to assign."
+          echo "Target Reviewers (JSON): $reviewers_json"
+
+          # 3. 리뷰어가 없는 경우 처리 (빈 배열 "[]" 이거나 null일 때)
+          if [ "$reviewers_json" == "[]" ] || [ -z "$reviewers_json" ]; then
+            echo "No eligible reviewers found."
+            exit 0
           fi
+
+          # 4. API로 직접 리뷰어 요청 전송
+          # JSON을 텍스트로 변환하지 않고 페이로드로 바로 사용합니다.
+          echo "{ \"reviewers\": $reviewers_json }" | \
+            gh api "repos/$repo/pulls/$pr_number/requested_reviewers" --input -
