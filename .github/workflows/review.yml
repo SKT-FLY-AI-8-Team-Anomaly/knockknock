@@ -13,22 +13,21 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y jq
 
       - name: Collect reviewers (exclude PR author)
-        id: reviewers
         run: |
           author="${{ github.event.pull_request.user.login }}"
 
-          reviewers_json=$(curl -s \
+          reviewers=$(curl -s \
             -H "Authorization: token ${{ secrets.SHL0501TOKEN }}" \
             https://api.github.com/repos/${{ github.repository }}/collaborators \
-            | jq -c --arg author "$author" '[.[] | select(.login != $author) | .login]')
+            | jq --arg author "$author" '[.[] | select(.login != $author) | .login]')
 
-          echo "REVIEWERS=$reviewers_json" >> "$GITHUB_ENV"
-          echo "Reviewers: $reviewers_json"
+          echo "Payload:"
+          echo "{\"reviewers\": $reviewers}" | tee payload.json
 
       - name: Add reviewers to PR
         run: |
           curl -s -X POST \
             -H "Authorization: token ${{ secrets.SHL0501TOKEN }}" \
             -H "Content-Type: application/json" \
-            -d '{"reviewers":'"$REVIEWERS"'}' \
+            --data-binary @payload.json \
             https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/requested_reviewers
