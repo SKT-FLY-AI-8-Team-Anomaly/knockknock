@@ -1,34 +1,50 @@
-name: Assign Reviewers (All except author)
+name: Auto Assign Reviewers
 
 on:
   pull_request:
     types: [opened]
-    branches:
-      - main
+
+permissions:
+  pull-requests: write
+  contents: read
 
 jobs:
-  assign-reviewer:
+  assign-reviewers:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Install jq
-        run: sudo apt-get update && sudo apt-get install -y jq
+      - uses: actions/checkout@v4
 
-      - name: Add reviewers to PR (exclude author)
-        run: |
-          author="${{ github.event.pull_request.user.login }}"
+      - name: Assign reviewers from CODEOWNERS (exclude author)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
 
-          reviewers=$(curl -s \
-            -H "Authorization: token ${{ secrets.SHL0501TOKEN }}" \
-            https://api.github.com/repos/${{ github.repository }}/contributors \
-            | jq -r --arg author "$author" '.[] | select(.login != $author) | .login')
+            const author = context.payload.pull_request.user.login;
 
-          reviewers_json=$(printf "%s\n" $reviewers | jq -R . | jq -s .)
+            // CODEOWNERS 읽기
+            const codeowners = fs.readFileSync('.github/CODEOWNERS', 'utf8');
 
-          echo "Reviewers to add: $reviewers_json"
+            // 마지막 줄(*) 기준으로 GitHub ID 추출
+            const reviewers = codeowners
+              .split('\n')
+              .find(line => line.startsWith('*'))
+              .split(' ')
+              .filter(v => v.startsWith('@'))
+              .map(v => v.replace('@', ''))
+              .filter(v => v !== author);
 
-          curl -s -X POST \
-            -H "Authorization: token ${{ secrets.SHL0501TOKEN }}" \
-            -H "Content-Type: application/json" \
-            -d "{\"reviewers\": $reviewers_json}" \
-            https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/requested_reviewers
+            if (reviewers.length === 0) {
+              console.log("No reviewers to assign");
+              return;
+            }
+
+            await github.rest.pulls.requestReviewers({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              reviewers
+            });
+
+            console.log("Requested reviewers:", reviewers);
