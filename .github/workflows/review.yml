@@ -9,24 +9,20 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Install jq
-        run: sudo apt-get update && sudo apt-get install -y jq
-
-      - name: Add reviewers to PR (exclude author)
+      - name: Assign reviewers (exclude author)
+        env:
+          GH_TOKEN: ${{ secrets.SHL0501TOKEN }}
         run: |
           author="${{ github.event.pull_request.user.login }}"
+          pr_number="${{ github.event.pull_request.number }}"
+          repo="${{ github.repository }}"
 
-          reviewers=$(curl -s \
-            -H "Authorization: token ${{ secrets.SHL0501TOKEN }}" \
-            https://api.github.com/repos/${{ github.repository }}/collaborators \
-            | jq --arg author "$author" '[.[] | select(.login != $author) | .login]')
+          reviewers=$(gh api repos/$repo/collaborators \
+            --jq ".[] | select(.login != \"$author\") | .login")
 
-          payload=$(jq -n --argjson reviewers "$reviewers" '{reviewers: $reviewers}')
+          echo "Reviewers:"
+          echo "$reviewers"
 
-          echo "Payload: $payload"
-
-          curl -X POST \
-            -H "Authorization: token ${{ secrets.SHL0501TOKEN }}" \
-            -H "Content-Type: application/json" \
-            --data-binary "$payload" \
-            "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/requested_reviewers"
+          for r in $reviewers; do
+            gh pr edit "$pr_number" --repo "$repo" --add-reviewer "$r" || true
+          done
