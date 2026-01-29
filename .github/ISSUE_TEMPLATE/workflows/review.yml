@@ -1,0 +1,33 @@
+name: Assign Random Reviewer
+
+on:
+  pull_request:
+    branches:
+      - develop
+
+jobs:
+  assign-reviewer:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Select Random Reviewer
+        id: select-reviewer
+        run: |
+          reviewers=$(curl -s \
+            -H "Authorization: token ${{ secrets.SHL0501TOKEN }}" \
+            https://api.github.com/repos/${{ github.repository }}/contributors \
+            | jq -r '.[].login')
+
+          reviewer_array=($reviewers)
+          random_index=$(($RANDOM % ${#reviewer_array[@]}))
+          selected_reviewer=${reviewer_array[$random_index]}
+
+          echo "reviewer=$selected_reviewer" >> $GITHUB_OUTPUT
+
+      - name: Add reviewer to PR
+        run: |
+          curl -s -X POST \
+            -H "Authorization: token ${{ secrets.REVIEW_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{"reviewers":["${{ steps.select-reviewer.outputs.reviewer }}"]}' \
+            https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/requested_reviewers
