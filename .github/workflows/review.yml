@@ -21,15 +21,12 @@ jobs:
             https://api.github.com/repos/${{ github.repository }}/collaborators \
             | jq --arg author "$author" '[.[] | select(.login != $author) | .login]')
 
-          echo "Reviewers: $reviewers"
-
           payload=$(jq -n --argjson reviewers "$reviewers" '{reviewers: $reviewers}')
 
-          echo "Payload:"
-          echo "$payload"
+          echo "Payload: $payload"
 
-          curl -v -X POST \
+          curl -X POST \
             -H "Authorization: token ${{ secrets.SHL0501TOKEN }}" \
             -H "Content-Type: application/json" \
-            -d "$payload" \
-            https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/requested_reviewers
+            --data-binary "$payload" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/requested_reviewers"
