@@ -2,37 +2,34 @@ name: Assign Reviewers (All except author)
 
 on:
   pull_request:
-    types: [opened]
-    branches:
-      - main
+    types: [opened, reopened, ready_for_review]
 
 jobs:
-  assign-reviewer:
+  assign-reviewers:
     runs-on: ubuntu-latest
 
     steps:
       - name: Install jq
         run: sudo apt-get update && sudo apt-get install -y jq
-
-      - name: Select Reviewers (exclude PR author)
-        id: select-reviewers
+      - name: Collect reviewers (exclude PR author)
+        id: reviewers
         run: |
           author="${{ github.event.pull_request.user.login }}"
 
           reviewers=$(curl -s \
             -H "Authorization: token ${{ secrets.SHL0501TOKEN }}" \
-            https://api.github.com/repos/${{ github.repository }}/contributors \
+            https://api.github.com/repos/${{ github.repository }}/collaborators \
             | jq -r --arg author "$author" '.[] | select(.login != $author) | .login')
 
-          # bash array → JSON array
-          reviewers_json=$(printf "%s\n" $reviewers | jq -R . | jq -s .)
+          reviewers_json=$(printf '%s\n' $reviewers | jq -R . | jq -s .)
 
           echo "reviewers=$reviewers_json" >> $GITHUB_OUTPUT
+          echo "Reviewers: $reviewers_json"
 
       - name: Add reviewers to PR
         run: |
           curl -s -X POST \
             -H "Authorization: token ${{ secrets.SHL0501TOKEN }}" \
             -H "Content-Type: application/json" \
-            -d "{\"reviewers\": ${{ steps.select-reviewers.outputs.reviewers }}}" \
+            -d "{\"reviewers\": ${{ steps.reviewers.outputs.reviewers }} }" \
             https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/requested_reviewers
