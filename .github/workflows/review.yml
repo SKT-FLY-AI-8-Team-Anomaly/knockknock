@@ -1,4 +1,4 @@
-name: Assign Reviewers (All except author)
+name: Assign Reviewers from CODEOWNERS
 
 on:
   pull_request:
@@ -9,44 +9,67 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
-      contents: read
+      contents: read # 파일 읽기 권한 필요
     steps:
-      - name: Assign reviewers (exclude author)
-        env:
-          GH_TOKEN: ${{ secrets.SHL0501TOKEN }}
-        run: |
-          # 1. PR 기본 정보 설정
-          author="${{ github.event.pull_request.user.login }}"
-          pr_number="${{ github.event.pull_request.number }}"
-          repo="${{ github.repository }}"
+      - name: Checkout code
+        uses: actions/checkout@v4 # CODEOWNERS 파일을 읽으려면 체크아웃이 필수입니다.
 
-          echo "--------------------------------"
-          echo "PR Author: $author"
-          echo "Repo: $repo"
-          echo "--------------------------------"
+      - name: Assign reviewers based on CODEOWNERS
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            // 1. PR 정보 가져오기
+            const author = context.payload.pull_request.user.login;
+            const prNumber = context.payload.pull_request.number;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
 
-          # 2. 리뷰어 목록을 JSON 배열로 가져오기 (예: ["user1", "user2"])
-          reviewers=$(gh api repos/$repo/collaborators \
-            --jq "[.[] | select(.login != \"$author\") | .login]")
+            const codeownersPath = '.github/CODEOWNERS';
 
-          echo "Found Reviewers (JSON): $reviewers"
+            console.log(`Checking ${codeownersPath}...`);
 
-          # 3. 리뷰어가 없는 경우(빈 배열) 종료
-          if [ "$reviewers" == "[]" ] || [ -z "$reviewers" ]; then
-            echo "⚠️ No eligible reviewers found."
-            exit 0
-          fi
+            try {
+              // 2. CODEOWNERS 파일 읽기
+              if (!fs.existsSync(codeownersPath)) {
+                console.log("⚠️ CODEOWNERS file not found.");
+                return;
+              }
 
-          # 4. JSON 파일 생성 (따옴표 문제 해결의 핵심)
-          # 데이터를 변수에 담아 직접 전송하지 않고, 파일(payload.json)로 저장합니다.
-          echo "{\"reviewers\": $reviewers}" > payload.json
+              const content = fs.readFileSync(codeownersPath, 'utf8');
+              console.log("File content loaded.");
 
-          # 파일 내용 확인 (디버깅용)
-          echo "Payload Content:"
-          cat payload.json
+              // 3. 정규식으로 @username 패턴 추출 (팀이나 이메일 제외하고 유저 아이디만 추출)
+              // 예: * @user1 @user2 -> user1, user2 추출
+              const matches = content.match(/@([a-zA-Z0-9-]+)/g);
 
-          # 5. gh api로 파일 전송
-          # --input 옵션으로 파일을 직접 읽어 보내므로 파싱 에러가 발생하지 않습니다.
-          gh api "repos/$repo/pulls/$pr_number/requested_reviewers" --input payload.json
-          
-          echo "✅ Review request sent successfully!"
+              if (!matches) {
+                console.log("No users found in CODEOWNERS.");
+                return;
+              }
+
+              // 4. 중복 제거 및 @ 제거, 작성자(Author) 제외
+              const reviewers = [...new Set(matches)]
+                .map(user => user.replace('@', '')) // @ 제거
+                .filter(user => user !== author);   // 작성자 제외
+
+              console.log(`Target Reviewers: ${reviewers.join(', ')}`);
+
+              // 5. 리뷰어 요청 전송
+              if (reviewers.length > 0) {
+                await github.rest.pulls.requestReviewers({
+                  owner,
+                  repo,
+                  pull_number: prNumber,
+                  reviewers: reviewers
+                });
+                console.log("✅ Review request sent successfully.");
+              } else {
+                console.log("⚠️ No eligible reviewers found (excluding author).");
+              }
+
+            } catch (error) {
+              console.log(`❌ Error: ${error.message}`);
+              core.setFailed(error.message);
+            }
