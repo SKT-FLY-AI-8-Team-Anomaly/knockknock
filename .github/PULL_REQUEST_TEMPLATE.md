@@ -10,3 +10,6 @@ PR TITLE
 ## 이슈
 
 <!-- Add a issues that referenced this pull request -->
+
+## 팀원들에게 공유할 사항
+<!-- 공유할 사항을 적습니다. -->
