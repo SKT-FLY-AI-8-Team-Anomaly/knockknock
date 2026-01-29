@@ -1,4 +1,4 @@
-name: Assign Random Reviewer
+name: Assign Reviewers (All except author)
 
 on:
   pull_request:
@@ -14,24 +14,25 @@ jobs:
       - name: Install jq
         run: sudo apt-get update && sudo apt-get install -y jq
 
-      - name: Select Random Reviewer
-        id: select-reviewer
+      - name: Select Reviewers (exclude PR author)
+        id: select-reviewers
         run: |
+          author="${{ github.event.pull_request.user.login }}"
+
           reviewers=$(curl -s \
             -H "Authorization: token ${{ secrets.SHL0501TOKEN }}" \
             https://api.github.com/repos/${{ github.repository }}/contributors \
-            | jq -r '.[].login')
+            | jq -r --arg author "$author" '.[] | select(.login != $author) | .login')
 
-          reviewer_array=($reviewers)
-          random_index=$(($RANDOM % ${#reviewer_array[@]}))
-          selected_reviewer=${reviewer_array[$random_index]}
+          # bash array → JSON array
+          reviewers_json=$(printf "%s\n" $reviewers | jq -R . | jq -s .)
 
-          echo "reviewer=$selected_reviewer" >> $GITHUB_OUTPUT
+          echo "reviewers=$reviewers_json" >> $GITHUB_OUTPUT
 
-      - name: Add reviewer to PR
+      - name: Add reviewers to PR
         run: |
           curl -s -X POST \
             -H "Authorization: token ${{ secrets.SHL0501TOKEN }}" \
             -H "Content-Type: application/json" \
-            -d '{"reviewers":["${{ steps.select-reviewer.outputs.reviewer }}"]}' \
+            -d "{\"reviewers\": ${{ steps.select-reviewers.outputs.reviewers }}}" \
             https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/requested_reviewers
