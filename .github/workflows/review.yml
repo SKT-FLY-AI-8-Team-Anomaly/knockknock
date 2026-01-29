@@ -2,6 +2,7 @@ name: Assign Random Reviewer
 
 on:
   pull_request:
+    types: [opened]
     branches:
       - develop
 
@@ -10,6 +11,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
       - name: Select Random Reviewer
         id: select-reviewer
         run: |
@@ -27,7 +31,7 @@ jobs:
       - name: Add reviewer to PR
         run: |
           curl -s -X POST \
-            -H "Authorization: token ${{ secrets.REVIEW_TOKEN }}" \
+            -H "Authorization: token ${{ secrets.SHL0501TOKEN }}" \
             -H "Content-Type: application/json" \
             -d '{"reviewers":["${{ steps.select-reviewer.outputs.reviewer }}"]}' \
             https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/requested_reviewers
