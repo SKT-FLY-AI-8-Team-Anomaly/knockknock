@@ -20,7 +20,7 @@ LLM(GPT-4o 등)을 활용하여 **대한민국 주택임대차표준계약서** 
 ## 📦 설치 방법 (Installation)
 ### 1. 필수 라이브러리 설치
 ```bash
-pip install langchain-openai langchain-community docxtpl pydantic python-dotenv python-dateutil
+pip install langchain-openai langchain-community docxtpl pydantic python-dotenv python-dateutil langgraph
 ```
 
 ### 2. 환경 변수 설정
@@ -59,14 +59,13 @@ python gen_fake_contract.py --count 100 --output_dir "./dataset/train"
 ```
 data/
 └── normal/
-    ├── contract_1_normal.docx       # 정상 계약서 (문서)
-    ├── contract_2_normal.docx       # 정상 계약서 (문서)
+    ├── contract_1.docx       # 정상 계약서 (문서)
+    ├── contract_1.json       # 정상 계약서 라벨 (JSON)
     └── ...
 └── anomaly/
-    ├── contract_1_anomaly.docx      # 비정상 계약서 (문서)
-    ├── contract_2_anomaly.docx      # 비정상 계약서 (문서)
+    ├── contract_1.docx      # 비정상 계약서 (문서)
+    ├── contract_1.json      # 비정상 계약서 라벨 (JSON)
     └── ...
-└── labels.json                      # 전체 라벨링 데이터 (정상 + 비정상)   
 ```
 
 ## 📊 JSON 라벨링 예시

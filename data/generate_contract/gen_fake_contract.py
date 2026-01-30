@@ -412,9 +412,7 @@ def validate_contract_logic(contract) -> list:
 def create_dataset(template_path, output_dir, count=10):
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
-    metadatas = []
-    json_path = f"{output_dir}/labels.json"
-    for is_anomaly in [True,False]:
+    for is_anomaly in [True, False]:
         for i in range(count):
             # 2. 데이터 생성
             contract_pydantic = generate_contract_data(is_anomaly)
@@ -453,7 +451,8 @@ def create_dataset(template_path, output_dir, count=10):
                     # 5. 파일명 설정
                     label = "abnormal" if contract_pydantic.is_anomaly_data else "normal"
                     base_filename = f"contract_{i+1}"
-                    
+                    json_path = f"{output_dir}/{label}/{base_filename}.json"
+
                     # DOCX 저장
                     docx_path = f"{output_dir}/{label}/{base_filename}.docx"
                     doc.save(docx_path)
@@ -467,11 +466,9 @@ def create_dataset(template_path, output_dir, count=10):
                         "validation_errors_detected": validation_errors,
                     }
                         
-                    print(f"✅ Generated: {docx_path}")
-                    metadatas.append(metadata)
-                
-    with open(json_path, "w", encoding="utf-8") as f:
-        json.dump(metadatas, f, ensure_ascii=False, indent=4)
+                    print(f"✅ Generated: {docx_path} {json_path}")            
+                    with open(json_path, "w", encoding="utf-8") as f:
+                        json.dump(metadata, f, ensure_ascii=False, indent=4)
 
 # 실행
 if __name__ == "__main__":
