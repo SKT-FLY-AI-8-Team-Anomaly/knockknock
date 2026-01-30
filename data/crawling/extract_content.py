@@ -21,7 +21,7 @@ def main():
     print("=" * 60)
     
     # 링크 파일 경로 입력
-    links_file = input("\n링크 파일 경로 (기본값: data/crawling/data/collected_links.json): ").strip() or "data/crawling/data/collected_links.json"
+    links_file = input("\n링크 파일 경로 (기본값: C:/Users/jery1/Projects/knockknock/data/crawling/data/merged_links.json): ").strip() or "C:/Users/jery1/Projects/knockknock/data/crawling/data/merged_links.json"
     
     # 링크 파일 로드
     try:
@@ -60,7 +60,7 @@ def main():
             print(f"제외 패턴으로 {excluded_count}개 링크 제외됨")
     
     # 기존 추출 결과 로드 (중복 방지 및 재개)
-    content_file = "data/crawling/data/extracted_content.json"
+    content_file = "data/crawling/data/extracted_content_3500to5000.json"
     existing_results = {}
     if Path(content_file).exists():
         try:
@@ -90,7 +90,7 @@ def main():
         use_all = input(f"\n{len(links_to_extract)}개 링크를 모두 추출하시겠습니까? (y/n, 기본값: y): ").strip().lower() or "y"
         if use_all != 'y':
             max_links = int(input("추출할 링크 개수 (기본값: 10): ").strip() or "10")
-            links_to_extract = links_to_extract[:max_links]
+            links_to_extract = links_to_extract[3500:max_links]
             print(f"{len(links_to_extract)}개 링크만 추출합니다.")
     
     # 텍스트 추출
