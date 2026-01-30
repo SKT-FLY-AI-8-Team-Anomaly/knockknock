@@ -4,6 +4,10 @@
 # Playwright - 브라우저 자동화 (구글 크롤링에 사용)
 playwright>=1.40.0
 
+# 법제처 API 수집 (openapi.py)
+requests>=2.28.0
+python-dotenv>=1.0.0
+
 # 참고: Playwright 설치 후 브라우저 설치 필요
 # python -m playwright install chromium
 # 또는 python -m playwright install (모든 브라우저 설치)
